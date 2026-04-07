@@ -3,18 +3,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
+from app.core.middleware import RequestLoggingMiddleware
+from app.core.logging_config import setup_logging
 from app.api.v1.router import api_router
 from app.db.base import engine, Base
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    setup_logging()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} started")
     yield
-    # Shutdown
     await engine.dispose()
     print("👋 Shutdown complete")
 
@@ -28,6 +29,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if settings.DEBUG else ["https://yourdomain.com"],
