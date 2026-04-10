@@ -1,43 +1,17 @@
 import uuid
-from sqlalchemy import String, Boolean, Enum as SAEnum
+from datetime import datetime
+from sqlalchemy import String, Boolean, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
-import enum
-
 from app.db.base import Base
-from app.models.base import TimestampMixin, UUIDMixin
-
-
-class UserRole(str, enum.Enum):
-    admin = "admin"
-    user = "user"
-
-
-class SubscriptionPlan(str, enum.Enum):
-    free = "free"
-    pro = "pro"
-    enterprise = "enterprise"
-
-
-class User(Base, UUIDMixin, TimestampMixin):
+class User(Base):
     __tablename__ = "users"
-
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    full_name: Mapped[str] = mapped_column(String(255), nullable=True)
-
-    role: Mapped[UserRole] = mapped_column(
-        SAEnum(UserRole), default=UserRole.user, nullable=False
-    )
-    plan: Mapped[SubscriptionPlan] = mapped_column(
-        SAEnum(SubscriptionPlan), default=SubscriptionPlan.free, nullable=False
-    )
-
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    stripe_customer_id: Mapped[str] = mapped_column(String(255), nullable=True)
-    stripe_subscription_id: Mapped[str] = mapped_column(String(255), nullable=True)
-
-    def __repr__(self) -> str:
-        return f"<User {self.email} [{self.role}]>"
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    role: Mapped[str] = mapped_column(String(50), default="user")
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

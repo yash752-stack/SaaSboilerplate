@@ -1,41 +1,23 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
-
-
 class Settings(BaseSettings):
-    # App
-    APP_NAME: str = "SaaSBoilerplate"
-    APP_VERSION: str = "1.0.0"
-    DEBUG: bool = False
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/saas"
     SECRET_KEY: str = "change-me-in-production"
-
-    # Database
-    DATABASE_URL: str
-    SYNC_DATABASE_URL: str
-
-    # JWT
-    JWT_SECRET_KEY: str = "change-me-in-production"
-    JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-
-    # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
-
-    # Stripe
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
-
-    # Email
-    SMTP_HOST: str = "smtp.gmail.com"
+    STRIPE_PRO_PRICE_ID: str = ""
+    STRIPE_ENTERPRISE_PRICE_ID: str = ""
+    EMAIL_FROM: str = "noreply@example.com"
+    SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 587
+    SMTP_TLS: bool = True
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    EMAILS_FROM: str = "noreply@yoursaas.com"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
-
+    FRONTEND_URL: str = "http://localhost:3000"
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
+    model_config = {"env_file": ".env", "case_sensitive": True}
 settings = Settings()

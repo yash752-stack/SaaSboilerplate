@@ -1,32 +1,33 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
-
-
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=8, max_length=100)
-    full_name: Optional[str] = Field(None, max_length=255)
-
-
-class LoginRequest(BaseModel):
+import re
+from pydantic import BaseModel, EmailStr, field_validator
+class UserRegister(BaseModel):
     email: EmailStr
     password: str
-
-
+    full_name: str | None = None
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain an uppercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain a digit")
+        return v
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-
-
 class RefreshRequest(BaseModel):
     refresh_token: str
-
-
-class AccessTokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class MessageResponse(BaseModel):
-    message: str
+class UserOut(BaseModel):
+    id: str
+    email: str
+    full_name: str | None
+    is_active: bool
+    is_verified: bool
+    role: str
+    model_config = {"from_attributes": True}
