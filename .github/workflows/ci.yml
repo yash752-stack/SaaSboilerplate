@@ -1,0 +1,48 @@
+name: CI
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env: {POSTGRES_USER: testuser, POSTGRES_PASSWORD: testpass, POSTGRES_DB: testdb}
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://testuser:testpass@localhost:5432/testdb
+      SECRET_KEY: ci-test-secret-key
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/0
+      STRIPE_SECRET_KEY: sk_test_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_placeholder
+      STRIPE_PRO_PRICE_ID: price_placeholder
+      STRIPE_ENTERPRISE_PRICE_ID: price_placeholder2
+      FRONTEND_URL: http://localhost:3000
+      EMAIL_FROM: noreply@example.com
+      SMTP_HOST: localhost
+      SMTP_PORT: "1025"
+      SMTP_TLS: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements.txt pytest pytest-asyncio httpx aiosqlite
+      - run: pytest tests/ -v --asyncio-mode=auto --tb=short
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install ruff
+      - run: ruff check app/ tests/
