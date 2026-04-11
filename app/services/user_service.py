@@ -1,5 +1,5 @@
-import uuid
 from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import HTTPException, status
@@ -14,7 +14,7 @@ async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
     return result.scalar_one_or_none()
 
 
-async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> Optional[User]:
+async def get_user_by_id(db: AsyncSession, user_id: str) -> Optional[User]:
     result = await db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
 
@@ -33,7 +33,7 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
         full_name=data.full_name,
     )
     db.add(user)
-    await db.flush()
+    await db.commit()
     await db.refresh(user)
     return user
 
@@ -52,7 +52,7 @@ async def update_user(db: AsyncSession, user: User, data: UserUpdate) -> User:
         user.full_name = data.full_name
 
     db.add(user)
-    await db.flush()
+    await db.commit()
     await db.refresh(user)
     return user
 
@@ -60,5 +60,5 @@ async def update_user(db: AsyncSession, user: User, data: UserUpdate) -> User:
 async def deactivate_user(db: AsyncSession, user: User) -> User:
     user.is_active = False
     db.add(user)
-    await db.flush()
+    await db.commit()
     return user

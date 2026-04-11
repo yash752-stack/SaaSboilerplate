@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import get_db
+from app.db.session import get_db
 from app.core.deps import get_current_active_user
 from app.models.user import User, SubscriptionPlan
 from app.schemas.billing import (

@@ -1,7 +1,8 @@
-import uuid
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, EmailStr, Field
+
 from app.models.user import UserRole, SubscriptionPlan
 
 
@@ -20,7 +21,7 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(UserBase):
-    id: uuid.UUID
+    id: str
     role: UserRole
     plan: SubscriptionPlan
     is_active: bool

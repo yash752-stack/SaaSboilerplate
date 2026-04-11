@@ -2,6 +2,7 @@ import smtplib
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+
 from app.core.config import settings
 
 logger = logging.getLogger("saas.email")
@@ -12,7 +13,7 @@ def send_email(to: str, subject: str, html_body: str) -> bool:
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = settings.EMAILS_FROM
+        msg["From"] = settings.EMAIL_FROM
         msg["To"] = to
 
         part = MIMEText(html_body, "html")
@@ -20,9 +21,11 @@ def send_email(to: str, subject: str, html_body: str) -> bool:
 
         with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
             server.ehlo()
-            server.starttls()
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.sendmail(settings.EMAILS_FROM, to, msg.as_string())
+            if settings.SMTP_TLS:
+                server.starttls()
+            if settings.SMTP_USER and settings.SMTP_PASSWORD:
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            server.sendmail(settings.EMAIL_FROM, to, msg.as_string())
 
         logger.info(f"Email sent to {to} | subject='{subject}'")
         return True

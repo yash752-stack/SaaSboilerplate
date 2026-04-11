@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import get_db
+from app.db.session import get_db
 from app.core.deps import get_current_active_user, get_current_admin
 from app.schemas.user import UserResponse, UserUpdate
 from app.schemas.auth import MessageResponse
 from app.services.user_service import update_user, deactivate_user, get_user_by_id
 from app.models.user import User
-import uuid
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -42,7 +41,7 @@ async def deactivate_my_account(
 
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
-    user_id: uuid.UUID,
+    user_id: str,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_admin),
 ):

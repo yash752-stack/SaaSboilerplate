@@ -1,16 +1,18 @@
 import stripe
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
+from sqlalchemy import select
 
 from app.core.config import settings
+from app.models.subscription import Subscription
 from app.models.user import User, SubscriptionPlan
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # Map plans → Stripe Price IDs (set these in your .env or Stripe dashboard)
 PLAN_PRICE_IDS: dict[SubscriptionPlan, str] = {
-    SubscriptionPlan.pro: "price_pro_monthly",           # replace with real Stripe price ID
-    SubscriptionPlan.enterprise: "price_enterprise_monthly",  # replace with real Stripe price ID
+    SubscriptionPlan.pro: settings.STRIPE_PRO_PRICE_ID,
+    SubscriptionPlan.enterprise: settings.STRIPE_ENTERPRISE_PRICE_ID,
 }
 
 PLAN_DETAILS = {
@@ -152,10 +154,6 @@ async def handle_webhook_event(db: AsyncSession, payload: bytes, sig_header: str
 
 
 async def _handle_checkout_completed(db: AsyncSession, session: dict):
-    from sqlalchemy import select
-    from app.models.user import User
-    import uuid
-
     user_id = session.get("metadata", {}).get("user_id")
     plan_str = session.get("metadata", {}).get("plan")
     subscription_id = session.get("subscription")
@@ -163,27 +161,31 @@ async def _handle_checkout_completed(db: AsyncSession, session: dict):
     if not user_id or not plan_str:
         return
 
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         return
 
     user.plan = SubscriptionPlan(plan_str)
     user.stripe_subscription_id = subscription_id
+    await _sync_subscription_row(
+        db,
+        user=user,
+        plan=user.plan,
+        stripe_subscription_id=subscription_id,
+        stripe_customer_id=user.stripe_customer_id,
+        status="active",
+    )
     db.add(user)
     await db.flush()
 
 
 async def _handle_subscription_updated(db: AsyncSession, subscription: dict):
-    from sqlalchemy import select
-    from app.models.user import User
-    import uuid
-
     user_id = subscription.get("metadata", {}).get("user_id")
     if not user_id:
         return
 
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         return
@@ -197,26 +199,38 @@ async def _handle_subscription_updated(db: AsyncSession, subscription: dict):
         user.plan = SubscriptionPlan.free
         user.stripe_subscription_id = None
 
+    await _sync_subscription_row(
+        db,
+        user=user,
+        plan=user.plan,
+        stripe_subscription_id=user.stripe_subscription_id,
+        stripe_customer_id=user.stripe_customer_id,
+        status=stripe_status or "active",
+    )
     db.add(user)
     await db.flush()
 
 
 async def _handle_subscription_deleted(db: AsyncSession, subscription: dict):
-    from sqlalchemy import select
-    from app.models.user import User
-    import uuid
-
     user_id = subscription.get("metadata", {}).get("user_id")
     if not user_id:
         return
 
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         return
 
     user.plan = SubscriptionPlan.free
     user.stripe_subscription_id = None
+    await _sync_subscription_row(
+        db,
+        user=user,
+        plan=SubscriptionPlan.free,
+        stripe_subscription_id=None,
+        stripe_customer_id=user.stripe_customer_id,
+        status="canceled",
+    )
     db.add(user)
     await db.flush()
 
@@ -226,3 +240,22 @@ async def _handle_payment_failed(db: AsyncSession, invoice: dict):
     logger = logging.getLogger("saas.billing")
     customer_id = invoice.get("customer")
     logger.warning(f"Payment failed for Stripe customer: {customer_id}")
+
+
+async def _sync_subscription_row(
+    db: AsyncSession,
+    user: User,
+    plan: SubscriptionPlan,
+    stripe_subscription_id: str | None,
+    stripe_customer_id: str | None,
+    status: str,
+):
+    result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
+    subscription = result.scalar_one_or_none()
+    if not subscription:
+        subscription = Subscription(user_id=user.id)
+    subscription.plan = plan
+    subscription.status = status
+    subscription.stripe_customer_id = stripe_customer_id
+    subscription.stripe_subscription_id = stripe_subscription_id
+    db.add(subscription)

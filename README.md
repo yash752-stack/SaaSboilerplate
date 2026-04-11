@@ -1,19 +1,22 @@
 # SaaS Boilerplate 🚀
 
-Production-grade FastAPI SaaS backend with PostgreSQL, JWT auth, Stripe billing, Celery background jobs, and Docker.
+Production-grade FastAPI SaaS platform with JWT auth, Stripe billing, Celery background jobs, multi-tenancy, uploads, realtime notifications, analytics, API keys, and a lightweight Next.js frontend scaffold.
 
 ## Stack
 
 | Layer | Tech |
 |-------|------|
 | Framework | FastAPI |
-| Database | PostgreSQL + SQLAlchemy (async) |
+| Database | PostgreSQL or SQLite + SQLAlchemy (async) |
 | Migrations | Alembic |
-| Auth | JWT (access + refresh tokens) |
-| Billing | Stripe |
-| Jobs | Celery + Redis |
+| Auth | JWT, refresh tokens, email verification, password reset, TOTP 2FA |
+| Billing | Stripe + invoices + usage tracking |
+| Jobs | Celery + Redis + webhook delivery |
+| Multi-tenancy | Organizations + memberships |
+| Files | S3-compatible presigned uploads |
+| Realtime | WebSockets + in-app notifications |
 | Tests | Pytest |
-| Deploy | Docker + GitHub Actions |
+| Deploy | Docker + GitHub Actions + Next.js frontend scaffold |
 
 ## Week Roadmap
 
@@ -26,6 +29,8 @@ Production-grade FastAPI SaaS backend with PostgreSQL, JWT auth, Stripe billing,
 | Day 5 | Celery jobs, Email verification, Password reset |
 | Day 6 | Pytest, Docker Compose, GitHub Actions CI |
 | Day 7 | Admin routes, Logging, Health checks, Deploy |
+| Phase 2 | Organizations, presigned uploads, WebSockets, plan rate limiting |
+| Phase 3 | Audit logs, 2FA, API keys, notifications, webhooks, analytics, invoice generation |
 
 ## Quickstart
 
@@ -65,12 +70,14 @@ alembic downgrade -1
 SaaSboilerplate/
 ├── app/
 │   ├── api/v1/endpoints/   # Route handlers
-│   ├── core/               # Config, security
+│   ├── core/               # Config, security, permissions, rate limits
 │   ├── db/                 # DB engine, session
-│   ├── models/             # SQLAlchemy models
+│   ├── models/             # SQLAlchemy models (users, orgs, audit, invoices, webhooks)
 │   ├── schemas/            # Pydantic schemas
 │   ├── services/           # Business logic
+│   ├── websocket/          # Realtime connection manager
 │   └── utils/              # Helpers
+├── frontend/               # Next.js starter app
 ├── alembic/                # DB migrations
 ├── tests/                  # Pytest tests
 ├── docker-compose.yml

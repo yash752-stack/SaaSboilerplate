@@ -1,12 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.middleware import RequestLoggingMiddleware
 from app.core.logging_config import setup_logging
+from app.core.security import decode_token
 from app.api.v1.router import api_router
 from app.db.base import engine, Base
+from app.websocket.manager import manager
 
 
 @asynccontextmanager
@@ -32,7 +34,7 @@ app = FastAPI(
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.DEBUG else ["https://yourdomain.com"],
+    allow_origins=["*"] if settings.DEBUG else settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,3 +50,25 @@ async def root():
         "docs": "/docs",
         "version": settings.APP_VERSION,
     }
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str):
+    try:
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+    except Exception:
+        await websocket.close(code=4401)
+        return
+
+    if not user_id:
+        await websocket.close(code=4401)
+        return
+
+    await manager.connect(user_id, websocket)
+    try:
+        while True:
+            message = await websocket.receive_text()
+            await websocket.send_json({"type": "echo", "message": message})
+    except WebSocketDisconnect:
+        manager.disconnect(user_id, websocket)

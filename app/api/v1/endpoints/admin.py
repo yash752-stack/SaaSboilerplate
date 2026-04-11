@@ -1,15 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+
 from app.db.session import get_db
 from app.api.v1.deps import require_admin
+from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.models.subscription import Subscription
+from app.models.user import SubscriptionPlan
 from app.schemas.auth import UserOut
 from pydantic import BaseModel
+
+
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
 class UpdateRoleRequest(BaseModel):
     role: str
+
+
 @router.get("/users")
 async def list_users(page: int = Query(1, ge=1), per_page: int = Query(20, ge=1, le=100), search: str | None = None, _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     offset = (page - 1) * per_page
@@ -48,6 +57,23 @@ async def deactivate_user(user_id: str, _admin: User = Depends(require_admin), d
 async def platform_stats(_admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     total = (await db.execute(select(func.count()).select_from(User))).scalar()
     active = (await db.execute(select(func.count()).select_from(User).where(User.is_active == True))).scalar()
-    pro = (await db.execute(select(func.count()).select_from(Subscription).where(Subscription.plan == "pro"))).scalar()
-    ent = (await db.execute(select(func.count()).select_from(Subscription).where(Subscription.plan == "enterprise"))).scalar()
+    pro = (await db.execute(select(func.count()).select_from(Subscription).where(Subscription.plan == SubscriptionPlan.pro))).scalar()
+    ent = (await db.execute(select(func.count()).select_from(Subscription).where(Subscription.plan == SubscriptionPlan.enterprise))).scalar()
     return {"total_users": total, "active_users": active, "subscriptions": {"free": total - pro - ent, "pro": pro, "enterprise": ent}}
+
+
+@router.get("/audit-logs")
+async def audit_logs(limit: int = Query(50, ge=1, le=200), _admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit))
+    logs = result.scalars().all()
+    return [
+        {
+            "id": log.id,
+            "action": log.action,
+            "resource_type": log.resource_type,
+            "resource_id": log.resource_id,
+            "metadata": log.metadata_json,
+            "created_at": log.created_at,
+        }
+        for log in logs
+    ]
