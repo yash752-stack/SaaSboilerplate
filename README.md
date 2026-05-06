@@ -165,6 +165,8 @@ SaaSboilerplate/
 
 ## Local Setup
 
+Recommended local/runtime version: `Python 3.12`
+
 ### 1. Configure environment
 
 ```bash
