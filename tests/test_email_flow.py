@@ -1,11 +1,9 @@
 import pytest
 from unittest.mock import patch
 from httpx import AsyncClient, ASGITransport
+
 from app.main import app
-from app.utils.tokens import (
-    generate_email_verification_token,
-    generate_password_reset_token,
-)
+from tests.utils import unique_email
 
 
 async def _register_and_login(client, email, password="testpass123"):
@@ -19,17 +17,19 @@ async def test_register_triggers_verification_email():
     with patch("app.tasks.email_tasks.send_verification_email.delay") as mock_task:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post("/api/v1/auth/register", json={
-                "email": "verify_me@test.com",
+                "email": unique_email("verify-me"),
                 "password": "testpass123",
             })
         assert resp.status_code == 201
+        mock_task.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_verify_email_with_valid_token():
+    email = unique_email("verify-flow")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         reg = await client.post("/api/v1/auth/register", json={
-            "email": "verifyflow@test.com", "password": "testpass123"
+            "email": email, "password": "testpass123"
         })
         user_id = reg.json()["id"]
 
@@ -38,6 +38,8 @@ async def test_verify_email_with_valid_token():
             mock_redis.delete.return_value = 1
 
             resp = await client.get(f"/api/v1/auth/verify-email?token=fake-valid-token")
+    assert resp.status_code == 200
+    assert resp.json()["message"] == "Email verified successfully"
 
 
 @pytest.mark.asyncio
@@ -70,7 +72,7 @@ async def test_reset_password_invalid_token():
 @pytest.mark.asyncio
 async def test_change_password_wrong_current():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        token = await _register_and_login(client, "changepass@test.com")
+        token = await _register_and_login(client, unique_email("change-pass-wrong"))
         resp = await client.post(
             "/api/v1/auth/change-password",
             json={"current_password": "wrongpassword", "new_password": "newpass123"},
@@ -81,8 +83,9 @@ async def test_change_password_wrong_current():
 
 @pytest.mark.asyncio
 async def test_change_password_success():
+    email = unique_email("change-pass-ok")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        token = await _register_and_login(client, "changepass2@test.com")
+        token = await _register_and_login(client, email)
         resp = await client.post(
             "/api/v1/auth/change-password",
             json={"current_password": "testpass123", "new_password": "newpass123"},

@@ -1,6 +1,8 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
+
 from app.main import app
+from tests.utils import unique_email
 
 
 async def _register_and_login(client, email):
@@ -29,7 +31,7 @@ async def test_list_plans():
 @pytest.mark.asyncio
 async def test_subscription_status_default_free():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        token = await _register_and_login(client, "billing_test@example.com")
+        token = await _register_and_login(client, unique_email("billing"))
         response = await client.get(
             "/api/v1/billing/status",
             headers={"Authorization": f"Bearer {token}"},
@@ -43,7 +45,7 @@ async def test_subscription_status_default_free():
 @pytest.mark.asyncio
 async def test_checkout_free_plan_rejected():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        token = await _register_and_login(client, "checkout_test@example.com")
+        token = await _register_and_login(client, unique_email("checkout"))
         response = await client.post(
             "/api/v1/billing/checkout",
             json={"plan": "free", "success_url": "http://localhost/success", "cancel_url": "http://localhost/cancel"},

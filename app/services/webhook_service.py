@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 import secrets
 from datetime import datetime
 
@@ -44,7 +45,7 @@ async def dispatch_event(
 ) -> WebhookDelivery:
     signature = hmac.new(
         endpoint.secret.encode("utf-8"),
-        str(payload).encode("utf-8"),
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
 

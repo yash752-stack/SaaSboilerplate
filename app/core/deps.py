@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.core.security import decode_token
+from app.models.organization import OrganizationMembership, OrganizationRole
 from app.models.user import User, UserRole
+from app.services.org_service import get_org_membership, get_organization_by_id
 
 bearer_scheme = HTTPBearer()
 
@@ -54,3 +56,34 @@ async def get_current_admin(
             detail="Admin access required",
         )
     return current_user
+
+
+async def get_current_org_membership(
+    org_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> OrganizationMembership:
+    organization = await get_organization_by_id(db, org_id)
+    if not organization:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+
+    membership = await get_org_membership(db, org_id, current_user.id)
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization access denied")
+
+    return membership
+
+
+def require_org_role(*roles: OrganizationRole):
+    async def _checker(
+        membership: OrganizationMembership = Depends(get_current_org_membership),
+    ) -> OrganizationMembership:
+        if roles and membership.role not in roles:
+            allowed_roles = ", ".join(role.value for role in roles)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Organization role required: {allowed_roles}",
+            )
+        return membership
+
+    return _checker

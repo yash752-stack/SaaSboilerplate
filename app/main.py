@@ -1,3 +1,4 @@
+import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -10,16 +11,18 @@ from app.api.v1.router import api_router
 from app.db.base import engine, Base
 from app.websocket.manager import manager
 
+logger = logging.getLogger("saas.app")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} started")
+    logger.info("%s v%s started", settings.APP_NAME, settings.APP_VERSION)
     yield
     await engine.dispose()
-    print("👋 Shutdown complete")
+    logger.info("Shutdown complete")
 
 
 app = FastAPI(

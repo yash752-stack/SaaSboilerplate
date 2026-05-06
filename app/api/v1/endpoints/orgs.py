@@ -2,9 +2,9 @@ from pydantic import BaseModel, EmailStr
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_active_user
+from app.core.deps import get_current_active_user, get_current_org_membership, require_org_role
 from app.db.session import get_db
-from app.models.organization import OrganizationRole
+from app.models.organization import OrganizationMembership, OrganizationRole
 from app.models.user import User
 from app.services.analytics_service import record_usage_event
 from app.services.audit_service import log_audit
@@ -55,7 +55,7 @@ async def list_orgs(
 async def members(
     org_id: str,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_active_user),
+    _: OrganizationMembership = Depends(get_current_org_membership),
 ):
     memberships = await list_org_members(db, org_id)
     return [
@@ -76,6 +76,9 @@ async def invite_member(
     payload: AddMemberRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    _: OrganizationMembership = Depends(
+        require_org_role(OrganizationRole.owner, OrganizationRole.admin)
+    ),
 ):
     membership = await add_member(db, org_id, payload.email, payload.role)
     if not membership:
@@ -106,10 +109,15 @@ async def delete_member(
     user_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
+    _: OrganizationMembership = Depends(
+        require_org_role(OrganizationRole.owner, OrganizationRole.admin)
+    ),
 ):
-    removed = await remove_member(db, org_id, user_id)
-    if not removed:
+    removal_status = await remove_member(db, org_id, user_id)
+    if removal_status == "not_found":
         raise HTTPException(status_code=404, detail="Membership not found")
+    if removal_status == "last_owner":
+        raise HTTPException(status_code=400, detail="Cannot remove the last active organization owner")
     await log_audit(db, current_user.id, "org.member.remove", "organization", org_id, {"user_id": user_id})
     await db.commit()
     return {"message": "Member removed"}

@@ -43,7 +43,7 @@ services:
       - redis
     volumes:
       - .:/app
-    command: celery -A app.core.celery_app worker --loglevel=info -Q default,email --concurrency=4
+    command: celery -A app.core.celery_app worker --loglevel=info -Q default,email,webhooks --concurrency=4
 
   beat:
     build: .

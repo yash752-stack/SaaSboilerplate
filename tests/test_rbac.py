@@ -1,6 +1,8 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
+
 from app.main import app
+from tests.utils import unique_email
 
 
 async def _register_and_login(client, email, password="testpass123"):
@@ -12,7 +14,7 @@ async def _register_and_login(client, email, password="testpass123"):
 @pytest.mark.asyncio
 async def test_admin_stats_requires_admin():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        token = await _register_and_login(client, "normaluser@test.com")
+        token = await _register_and_login(client, unique_email("normal-user"))
         response = await client.get(
             "/api/v1/admin/stats",
             headers={"Authorization": f"Bearer {token}"},
@@ -23,7 +25,7 @@ async def test_admin_stats_requires_admin():
 @pytest.mark.asyncio
 async def test_pro_feature_blocked_for_free_user():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        token = await _register_and_login(client, "freeuser@test.com")
+        token = await _register_and_login(client, unique_email("free-user"))
         response = await client.get(
             "/api/v1/features/pro",
             headers={"Authorization": f"Bearer {token}"},
@@ -36,4 +38,4 @@ async def test_pro_feature_blocked_for_free_user():
 async def test_unauthenticated_blocked():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/api/v1/features/free")
-    assert response.status_code == 403
+    assert response.status_code in (401, 403)

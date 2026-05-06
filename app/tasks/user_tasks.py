@@ -1,4 +1,9 @@
+import asyncio
 import logging
+from datetime import datetime, timedelta
+
+from sqlalchemy import select
+
 from app.core.celery_app import celery_app
 
 logger = logging.getLogger("saas.tasks.user")
@@ -33,9 +38,45 @@ def cleanup_expired_tokens():
     queue="default",
 )
 def send_plan_expiry_reminders():
-    """
-    Placeholder: query users whose subscriptions expire soon
-    and enqueue reminder emails. Wire up with Stripe subscription data.
-    """
-    logger.info("[plan_expiry] reminder task triggered — implement with Stripe data")
-    return {"status": "noop"}
+    return asyncio.run(_send_plan_expiry_reminders())
+
+
+async def _send_plan_expiry_reminders():
+    from app.db.session import AsyncSessionLocal
+    from app.models.subscription import Subscription
+    from app.services.notification_service import create_notification
+
+    reminder_window_end = datetime.utcnow() + timedelta(days=7)
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Subscription).where(
+                Subscription.cancel_at_period_end == True,
+                Subscription.status == "active",
+                Subscription.current_period_end.is_not(None),
+                Subscription.current_period_end <= reminder_window_end,
+            )
+        )
+        subscriptions = result.scalars().all()
+
+        reminders_sent = 0
+        for subscription in subscriptions:
+            await create_notification(
+                db,
+                subscription.user_id,
+                "Subscription ending soon",
+                "Your plan is scheduled to end within the next 7 days. Update billing to avoid service interruption.",
+                "billing",
+                {
+                    "subscription_id": subscription.id,
+                    "current_period_end": subscription.current_period_end.isoformat()
+                    if subscription.current_period_end
+                    else None,
+                },
+            )
+            reminders_sent += 1
+
+        await db.commit()
+
+    logger.info("[plan_expiry] reminders_sent=%s", reminders_sent)
+    return {"status": "completed", "reminders_sent": reminders_sent}
